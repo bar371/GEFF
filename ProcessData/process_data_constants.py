@@ -1,0 +1,11 @@
+import os.path
+
+UNDETECTED_FACE = '-00001'
+PRCC_TEST_PATH = os.path.join("rgb", "test")
+CCVID = 'ccvid'
+PRCC = 'prcc'
+LTCC = 'ltcc'
+LAST = 'last'
+DATASETS = [CCVID, PRCC, LTCC, LAST]
+CAL_DATALOADER = 'CAL_DATALOADER'
+FACE_DATALOADER = 'FACE_DATALODAER'
