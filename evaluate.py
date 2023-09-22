@@ -8,7 +8,7 @@ def evalute_wrapper(dataset, distmat,  q_pids, g_pids, q_camids, g_camids, q_clo
     print("Results ---------------------------------------------------")
     print('top1:{:.1%} top5:{:.1%} top10:{:.1%} top20:{:.1%} mAP:{:.1%}'.format(cmc[0], cmc[4], cmc[9], cmc[19], mAP))
     print("-----------------------------------------------------------")
-    if dataset in ['ltcc', 'ccvid']:
+    if dataset in ['ltcc', 'ccvid', 'vcclothes']:
         print('Evaluating clothes changing with mode:SC')
         print("Results ---------------------------------------------------")
         cmc, mAP = evaluate_with_clothes(distmat, q_pids, g_pids, q_camids, g_camids, q_clothes_ids, g_clothes_ids,

@@ -25,6 +25,7 @@ class InsightFace:
         self.face_detector = None
         self.similarities = None
         self.predicted_labels = None
+        self.gallery_references = None
 
     def init(self):
         self.g_camids = self.dataset_processor.extract_camids(self.gallery_imgs_paths)
@@ -136,11 +137,14 @@ class InsightFace:
 
     def predict_labels(self):
         predicted_labels = self.g_pids[self.similarities[:, 1].astype(int)]
+        gallery_references = np.array(self.gallery_imgs_paths)[self.similarities[:, 1].astype(int)]
         max_scores = np.array(self.similarities[:, 0])
         # set all queries for which no face was detected or that the similarity score is below a given threshold to -1
         th_indices = np.where(max_scores < float(self.similarity_threshold))[0]
         predicted_labels[th_indices] = -1
+        gallery_references[th_indices] = ''
         self.predicted_labels = [f"{int(x):06d}" for x in predicted_labels]
+        self.gallery_references = gallery_references
 
         # For the CCVID dataset, convert the per image labels to the majority vote per sequence
         if self.dataset_processor.dataset == CCVID:

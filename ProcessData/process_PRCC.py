@@ -18,7 +18,9 @@ class ProcessPRCC(ProcessDataset):
         assert split in ['A', 'B', 'C'], "PRCC split of query (test) folder must be either A,B or C"
         imgs_paths = []
         print(f"Loading split {split} for PRCC dataset..")
-        for img in tqdm.tqdm(glob(os.path.join(self.data_base_path, split) + "**/**", recursive=True)):
+        glob_paths = glob(os.path.join(self.data_base_path, split) + "**/**", recursive=True)
+        glob_paths.sort()
+        for img in tqdm.tqdm(glob_paths):
             suffix = img[-3:]
             if suffix == 'jpg' and os.path.isfile(img):
                 imgs_paths.append(img)

@@ -15,7 +15,9 @@ class ProcessLaST(ProcessDataset):
         assert split in ['query', 'gallery'], "LaST split must be one of ['query', 'gallery']"
         imgs_paths = []
         print(f"Loading {split} for LaST dataset..")
-        for img in tqdm.tqdm(glob(os.path.join(self.data_base_path, 'test', split) + "**/**", recursive=True)):
+        glob_paths = glob(os.path.join(self.data_base_path,'test', split) + "**/**", recursive=True)
+        glob_paths.sort()
+        for img in tqdm.tqdm(glob_paths):
             suffix = img[-3:]
             if suffix in ['jpg', 'png'] and os.path.isfile(img):
                 imgs_paths.append(img)

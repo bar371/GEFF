@@ -9,18 +9,20 @@ from argparse import ArgumentParser
 from ReIDModules.CAL.configs.default_img import _C
 from ReIDModules.factory import ReID_module_factory
 from evaluate import evalute_wrapper, evaluate_performance_ccvid
-from ProcessData.process_dataset import build_dataloader
+from ProcessData.process_dataset import build_custom_dataloader
 from ProcessData.utils import prepare_dataset
 import torch
 from FaceModules.insightface import InsightFace
 import torch.nn.functional as F
 import numpy as np
+from ReIDModules.CAL.tools.utils import set_seed
+from pathlib import Path
 
 
 def get_args():
     parser = ArgumentParser()
     parser.add_argument('dataset', help='On which dataset to run?', choices=DATASETS)
-    parser.add_argument('reid_model', help='Which ReID module to use', choices='CAL')
+    parser.add_argument('reid_model', help='Which ReID module to use', choices=['CAL','AIM', 'CTL'])
     parser.add_argument('--dataset_path',
                         help='Full path to the dataset.')
     parser.add_argument('--detection_threshold',
@@ -38,13 +40,25 @@ def get_args():
 
 
 def get_config(args):
-    config = _C.clone()
-    config.defrost()
-    config.merge_from_file(args.reid_config)
-    if args.dataset:
-        config.DATA.DATASET = args.dataset
-    if args.dataset_path:
-        config.DATA.ROOT = args.dataset_path
+    config = None
+    if args.reid_model == 'CTL':
+        from ReIDModules.centroids_reid.config import cfg
+        config = cfg.clone()
+        config.defrost()
+        config.merge_from_file(args.reid_config)
+        if args.dataset:
+            config.DATASETS.NAMES = args.dataset
+        if args.dataset_path:
+            config.DATASETS.ROOT_DIR = args.dataset_path
+
+    elif args.reid_model in ['AIM','CAL']:
+        config = _C.clone()
+        config.defrost()
+        config.merge_from_file(args.reid_config)
+        if args.dataset:
+            config.DATA.DATASET = args.dataset
+        if args.dataset_path:
+            config.DATA.ROOT = args.dataset_path
     config.freeze()
     return config
 
@@ -126,7 +140,7 @@ def find_best_match(q_feat, q_camid, g_feats, g_pids, g_camids, q_clothes_id, g_
 
 
 def reid_inference_on_ccvid(args, config):
-    queryloader, galleryloader, dataset = build_dataloader(config)
+    queryloader, galleryloader, dataset = build_custom_dataloader(config, model_name=args.model)
     queryloader, q_track_mapper = convert_ccvid_to_img_dataset(queryloader)
     galleryloader, _ = convert_ccvid_to_img_dataset(galleryloader)
     reid_model = ReID_module_factory(args.reid_model, device=args.device)
@@ -147,7 +161,7 @@ def reid_inference_on_ccvid(args, config):
 
 
 def reid_inference_on_prcc(args, config):
-    queryloader_same, queryloader_diff, galleryloader, dataset = build_dataloader(config)
+    queryloader_same, queryloader_diff, galleryloader, dataset, enrichedloader = build_custom_dataloader(config, model_name=args.reid_model)
     reid_model = ReID_module_factory(model_name=args.reid_model, device=args.device)
     reid_model.init_model(config, args.reid_checkpoint)
     print('Extracting query features of same clothes samples in PRCC')
@@ -161,6 +175,23 @@ def reid_inference_on_prcc(args, config):
     print('Computing distance matrix')
     distmat_same = get_cosine_distmat(qf=qsf, gf=gf, device=reid_model.device)
     distmat_diff = get_cosine_distmat(qf=qdf, gf=gf, device=reid_model.device)
+
+    if enrichedloader:
+        print(f'Extracting reid enriched gallery features in {args.dataset}')
+        egf, _, _, _ = reid_model.extract_features(enrichedloader)
+
+        print(f'Computing reid enriched distmat_same in {args.dataset}')
+        enriched_distmat_same = get_cosine_distmat(qf=qsf, gf=egf, device=reid_model.device)
+
+        # create unique paths:
+        gallery_paths = [("_".join(img_path[0].split(os.sep)[-3:]), ) for img_path in dataset.gallery]
+        enriched_paths = [("_".join(img_path[0].split(os.sep)[-3:]), ) for img_path in dataset.enriched_gallery]
+        distmat_same = apply_enriched_gallery(distmat_same, enriched_distmat_same, gallery_paths, enriched_paths)
+
+        print(f'Computing reid enriched distmat_diff in {args.dataset}')
+        enriched_distmat_diff = get_cosine_distmat(qf=qdf, gf=egf, device=reid_model.device)
+        distmat_diff = apply_enriched_gallery(distmat_diff, enriched_distmat_diff, gallery_paths, enriched_paths)
+
     qs_pids, qs_camids, qs_clothes_ids = qs_pids.numpy(), qs_camids.numpy(), qs_clothes_ids.numpy()
     qd_pids, qd_camids, qd_clothes_ids = qd_pids.numpy(), qd_camids.numpy(), qd_clothes_ids.numpy()
     g_pids, g_camids, g_clothes_ids = g_pids.numpy(), g_camids.numpy(), g_clothes_ids.numpy()
@@ -173,7 +204,7 @@ def reid_inference_on_prcc(args, config):
 
 
 def reid_inference(args, config):
-    queryloader, galleryloader, dataset = build_dataloader(config)
+    queryloader, galleryloader, dataset, enrichedloader = build_custom_dataloader(config, model_name=args.reid_model)
     reid_model = ReID_module_factory(args.reid_model, device=args.device)
     reid_model.init_model(config, args.reid_checkpoint)
     print(f'Extracting reid query features in {args.dataset}')
@@ -182,9 +213,42 @@ def reid_inference(args, config):
     gf, g_pids, g_camids, g_clothes_ids = reid_model.extract_features(galleryloader)
     print(f'Computing reid distmat in {args.dataset}')
     distmat = get_cosine_distmat(qf=qf, gf=gf, device=reid_model.device)
+
+    if enrichedloader:
+        print(f'Extracting reid enriched gallery features in {args.dataset}')
+        egf, _, _, _ = reid_model.extract_features(enrichedloader)
+
+        print(f'Computing reid enriched distmat in {args.dataset}')
+        enriched_distmat = get_cosine_distmat(qf=qf, gf=egf, device=reid_model.device)
+        if args.dataset == LAST:
+            gallery_paths = [(img_path[0].split(os.sep)[-1], ) for img_path in dataset.gallery]
+            enriched_paths = [(img_path[0].split(os.sep)[-1], ) for img_path in dataset.enriched_gallery]
+        else:
+            gallery_paths = dataset.gallery
+            enriched_paths = dataset.enriched_gallery
+        distmat = apply_enriched_gallery(distmat, enriched_distmat, gallery_paths, enriched_paths)
+
     q_pids, q_camids, q_clothes_ids = q_pids.numpy(), q_camids.numpy(), q_clothes_ids.numpy()
     g_pids, g_camids, g_clothes_ids = g_pids.numpy(), g_camids.numpy(), g_clothes_ids.numpy()
     return distmat, q_pids, q_camids, q_clothes_ids, g_pids, g_camids, g_clothes_ids
+
+
+def apply_enriched_gallery(distmat, enriched_distmat, gallery_paths, enriched_gallery_paths):
+    enriched_to_orig_mapping = {}
+    for e_idx, enriched_sample in enumerate(enriched_gallery_paths):
+        orig_gallery_name = ('_').join((Path(enriched_sample[0]).name.split('_')[:-1]))
+        for o_idx, gallery_sample in enumerate(gallery_paths):
+            if orig_gallery_name in gallery_sample[0]:
+                enriched_to_orig_mapping[e_idx] = o_idx
+    for q_idx in range(len(distmat)):
+        replaced_imgs = 0
+        for e_idx in range(len(enriched_gallery_paths)):
+            if enriched_distmat[q_idx][e_idx] < distmat[q_idx][enriched_to_orig_mapping[e_idx]]:
+                distmat[q_idx][enriched_to_orig_mapping[e_idx]] = enriched_distmat[q_idx][e_idx]
+                replaced_imgs += 1
+        # print(f'Replaced the distance of {replaced_imgs} gallery samples for query {q_idx}')
+    return distmat
+
 
 
 def face_inference(args):
@@ -242,13 +306,19 @@ def ccvid_face_inference(args):
 def run_inference(args, config):
     alpha = float(args.alpha)
     if args.dataset == PRCC:
-        face_distmat = face_inference(args)
         reid_distmat_diff, reid_distmat_same, qs_pids, qs_camids, qs_clothes_ids, \
         qd_pids, qd_camids, qd_clothes_ids, g_pids, g_camids, g_clothes_ids = reid_inference_on_prcc(args, config)
-        distmat_same = alpha * reid_distmat_same + (1 - alpha) * face_distmat[:NUM_QUERY_SAME, :]
+        if float(alpha) == 1.0:
+            distmat_same = reid_distmat_same
+            distmat_diff = reid_distmat_diff
+        else:
+            face_distmat = face_inference(args)
+            distmat_same = alpha * reid_distmat_same + (1 - alpha) * face_distmat[:NUM_QUERY_SAME, :]
+            distmat_diff = alpha * reid_distmat_diff + (1 - alpha) * face_distmat[NUM_QUERY_SAME:, :]
+
         evalute_wrapper(args.dataset, distmat_same, qs_pids, g_pids, qs_camids, g_camids, g_clothes_ids=None,
                         q_clothes_ids=None, extra_msg="Computing CMC and mAP for the same clothes setting")
-        distmat_diff = alpha * reid_distmat_diff + (1 - alpha) * face_distmat[NUM_QUERY_SAME:, :]
+
         evalute_wrapper(args.dataset, distmat_diff, qd_pids, g_pids, qd_camids, g_camids, g_clothes_ids=None,
                         q_clothes_ids=None, extra_msg="Computing CMC and mAP only for clothes changing")
     elif args.dataset == CCVID:
@@ -267,15 +337,31 @@ def run_inference(args, config):
         evaluate_performance_ccvid(all_tracks_results, args.alpha)
 
     else:
-        face_distmat = face_inference(args)
-        reid_distmat, q_pids, q_camids, q_clothes_ids, g_pids, g_camids, g_clothes_ids = reid_inference(args, config)
-        distmat = alpha * reid_distmat + (1 - alpha) * face_distmat
-        evalute_wrapper(args.dataset, distmat, q_pids, g_pids, q_camids, g_camids, q_clothes_ids=q_clothes_ids,
-                        g_clothes_ids=g_clothes_ids, extra_msg='')
+        # LTCC, LAST, VC-Clothes
+        if float(alpha) == 1.0:  # only ReID module should be used
+            distmat, q_pids, q_camids, q_clothes_ids, g_pids, g_camids, g_clothes_ids = reid_inference(args, config)
+        elif float(alpha) == 0.0:  # only Face module should be used
+            distmat = face_inference(args)
+            _, q_pids, q_camids, q_clothes_ids, g_pids, g_camids, g_clothes_ids = reid_inference(args, config)
+        else:  # combination of both Face and ReID modules.
+            face_distmat = face_inference(args)
+            reid_distmat, q_pids, q_camids, q_clothes_ids, g_pids, g_camids, g_clothes_ids = reid_inference(args, config)
+            distmat = alpha * reid_distmat + (1 - alpha) * face_distmat
+
+        evalute_wrapper(args.dataset, distmat, q_pids, g_pids, q_camids, g_camids,
+                        q_clothes_ids=q_clothes_ids,
+                        g_clothes_ids=g_clothes_ids,
+                        extra_msg='')
 
 
 def main(args):
     config = get_config(args)
+    if args.reid_model == 'CTL':
+        print(f'Setting seed to: {config.REPRODUCIBLE_SEED}')
+        set_seed(config.REPRODUCIBLE_SEED)
+    else:
+        print(f'Setting seed to: {config.SEED}')
+        set_seed(config.SEED)
     run_inference(args, config=config)
 
 

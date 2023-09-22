@@ -25,12 +25,17 @@ class LTCC(object):
         self.train_dir = osp.join(self.dataset_dir, 'train')
         self.query_dir = osp.join(self.dataset_dir, 'query')
         self.gallery_dir = osp.join(self.dataset_dir, 'test')
+        self.enriched_dir = None
+        if osp.isdir(osp.join(self.dataset_dir, 'enriched_gallery')):
+            self.enriched_dir = osp.join(self.dataset_dir, 'enriched_gallery')
         self._check_before_run()
 
         train, num_train_pids, num_train_imgs, num_train_clothes, pid2clothes = \
             self._process_dir_train(self.train_dir)
         query, gallery, num_test_pids, num_query_imgs, num_gallery_imgs, num_test_clothes = \
             self._process_dir_test(self.query_dir, self.gallery_dir)
+        if self.enriched_dir is not None:
+            _, enriched_gallery, _, _, num_enriched_imgs, _ = self._process_dir_test(self.query_dir, self.enriched_dir)
         num_total_pids = num_train_pids + num_test_pids
         num_total_imgs = num_train_imgs + num_query_imgs + num_gallery_imgs
         num_test_imgs = num_query_imgs + num_gallery_imgs 
@@ -46,6 +51,8 @@ class LTCC(object):
         logger.info("  test     | {:5d} | {:8d} | {:9d}".format(num_test_pids, num_test_imgs, num_test_clothes))
         logger.info("  query    | {:5d} | {:8d} |".format(num_test_pids, num_query_imgs))
         logger.info("  gallery  | {:5d} | {:8d} |".format(num_test_pids, num_gallery_imgs))
+        if self.enriched_dir is not None:
+            logger.info("  enriched | ----- | {:8d} |".format(num_enriched_imgs))
         logger.info("  ----------------------------------------")
         logger.info("  total    | {:5d} | {:8d} | {:9d}".format(num_total_pids, num_total_imgs, num_total_clothes))
         logger.info("  ----------------------------------------")
@@ -53,6 +60,8 @@ class LTCC(object):
         self.train = train
         self.query = query
         self.gallery = gallery
+        if self.enriched_dir is not None:
+            self.enriched_gallery = enriched_gallery
 
         self.num_train_pids = num_train_pids
         self.num_train_clothes = num_train_clothes

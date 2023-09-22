@@ -118,6 +118,14 @@ def evaluate_with_clothes(distmat, q_pids, g_pids, q_camids, g_camids, q_clothid
         if good_index.size == 0:
             num_no_gt += 1
             continue
+
+        if mode == 'CC':  # Avoid testing on query samples that are not CC only when applying enriched gallery
+            unique_cam_ids_of_good_index = np.unique(g_camids[good_index])
+            # If the only cam_ids are of the enriched samples, then this query is not tested under the original setting
+            # and should be skipped.
+            if len(unique_cam_ids_of_good_index) == 1 and unique_cam_ids_of_good_index[0] == -1:
+                num_no_gt += 1
+                continue
     
         ap_tmp, CMC_tmp = compute_ap_cmc(index[i], good_index, junk_index)
         if CMC_tmp[0]==1:
