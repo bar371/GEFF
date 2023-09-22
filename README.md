@@ -17,6 +17,7 @@ The different datasets can be downloaded through the official pages of these dat
 * [LTCC](https://naiq.github.io/LTCC_Perosn_ReID.html)
 * [PRCC](https://www.isee-ai.cn/~yangqize/clothing.html)
 * [LaST](https://github.com/shuxjweb/last)
+* [VC-Clothes](https://wanfb.github.io/dataset.html#) 
 
 ### Custom Dataset
 Inference on a custom dataset including person tracking, will be released soon, together with the ***42Street*** dataset presented in the paper. 
@@ -28,10 +29,10 @@ See [this](https://drive.google.com/drive/folders/1qm1D38WzH2Rqv8NKteulTB3bU4W3n
 ## Results
 Below we provide the results achieved by our model on the clothes-changing settings in the different datasets. 
 
-| Dataset | PRCC | LTCC | LaST | CCVID |
-|---------|------|------|------|-------|
-| Top-1   | 83.7 | 74.8 | 75.8 | 89.2  |
-| mAP     | 66.7 | 48.4 | 29.6 | NaN   |
+| Dataset | PRCC | LTCC | LaST | VC-Clothes | CCVID |
+|---------|------|------|------|------------|-------|
+| Top-1   | 81.9 | 76.3 | 78.0 | 94.9       | 89.2  |
+| mAP     | 58.8 | 42.3 | 37.2 | 88.9       | NaN   |
 
 
 ## Acknowledgments

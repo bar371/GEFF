@@ -30,6 +30,9 @@ class LaST(object):
         self.val_gallery_dir = osp.join(self.dataset_dir, 'val', 'gallery')
         self.test_query_dir = osp.join(self.dataset_dir, 'test', 'query')
         self.test_gallery_dir = osp.join(self.dataset_dir, 'test', 'gallery')
+        self.enriched_dir = None
+        if osp.isdir(osp.join(self.dataset_dir, 'test', 'enriched_gallery')):
+            self.enriched_dir = osp.join(self.dataset_dir, 'test', 'enriched_gallery')
         self._check_before_run()
 
         pid2label, clothes2label, pid2clothes = self.get_pid2label_and_clothes2label(self.train_dir)
@@ -39,7 +42,8 @@ class LaST(object):
         val_gallery, num_val_gallery_pids = self._process_dir(self.val_gallery_dir, relabel=False, recam=len(val_query))
         test_query, num_test_query_pids = self._process_dir(self.test_query_dir, relabel=False)
         test_gallery, num_test_gallery_pids = self._process_dir(self.test_gallery_dir, relabel=False, recam=len(test_query))
-
+        if self.enriched_dir is not None:
+            enriched_gallery, _ = self._process_dir(self.enriched_dir, relabel=False, recam=len(test_query))
         num_total_pids = num_train_pids+num_val_gallery_pids+num_test_gallery_pids
         num_total_imgs = len(train) + len(val_query) + len(val_gallery) + len(test_query) + len(test_gallery)
 
@@ -54,6 +58,8 @@ class LaST(object):
         logger.info("  gallery(val)  | {:5d} | {:8d} |".format(num_val_gallery_pids, len(val_gallery)))
         logger.info("  query         | {:5d} | {:8d} |".format(num_test_query_pids, len(test_query)))
         logger.info("  gallery       | {:5d} | {:8d} |".format(num_test_gallery_pids, len(test_gallery)))
+        if self.enriched_dir is not None:
+            logger.info("  enriched      | ----- | {:8d} |".format(len(enriched_gallery)))
         logger.info("  --------------------------------------------")
         logger.info("  total         | {:5d} | {:8d} | ".format(num_total_pids, num_total_imgs))
         logger.info("  --------------------------------------------")
@@ -63,6 +69,8 @@ class LaST(object):
         self.val_gallery = val_gallery
         self.query = test_query
         self.gallery = test_gallery
+        if self.enriched_dir is not None:
+            self.enriched_gallery = enriched_gallery
 
         self.num_train_pids = num_train_pids
         self.num_train_clothes = len(clothes2label)
@@ -115,7 +123,13 @@ class LaST(object):
             raise RuntimeError("'{}' is not available".format(self.test_gallery_dir))
 
     def _process_dir(self, dir_path, pid2label=None, clothes2label=None, relabel=False, recam=0):
-        if 'query' in dir_path:
+        enriched_dir = False
+        clothes_path_idx = -1
+        if 'enriched_gallery' in dir_path:
+            enriched_dir = True
+            clothes_path_idx = -2
+
+        if 'query' in dir_path or enriched_dir:
             img_paths = glob.glob(osp.join(dir_path, '*.jpg'))
         else:
             img_paths = glob.glob(osp.join(dir_path, '*/*.jpg'))
@@ -125,7 +139,8 @@ class LaST(object):
         pid_container = set()
         for ii, img_path in enumerate(img_paths):
             names = osp.basename(img_path).split('.')[0].split('_')
-            clothes = names[0] + '_' + names[-1]
+
+            clothes = names[0] + '_' + names[clothes_path_idx]
             pid = int(names[0])
             pid_container.add(pid)
             camid = int(recam + ii)

@@ -25,6 +25,9 @@ class PRCC(object):
         self.train_dir = osp.join(self.dataset_dir, 'rgb/train')
         self.val_dir = osp.join(self.dataset_dir, 'rgb/val')
         self.test_dir = osp.join(self.dataset_dir, 'rgb/test')
+        self.enriched_dir = None
+        if osp.isdir(osp.join(self.dataset_dir, 'rgb', 'test', 'enriched_gallery')):
+            self.enriched_dir = osp.join(self.dataset_dir, 'rgb', 'test', 'enriched_gallery')
         self._check_before_run()
 
         train, num_train_pids, num_train_imgs, num_train_clothes, pid2clothes = \
@@ -35,6 +38,9 @@ class PRCC(object):
         query_same, query_diff, gallery, num_test_pids, \
             num_query_imgs_same, num_query_imgs_diff, num_gallery_imgs, \
             num_test_clothes, gallery_idx = self._process_dir_test(self.test_dir)
+
+        if self.enriched_dir is not None:
+            _, _, enriched_gallery, _, _, _, num_enriched_imgs, _, _ = self._process_dir_test(self.enriched_dir)
 
         num_total_pids = num_train_pids + num_test_pids
         num_test_imgs = num_query_imgs_same + num_query_imgs_diff + num_gallery_imgs
@@ -53,6 +59,8 @@ class PRCC(object):
         logger.info("  query(same) | {:5d} | {:8d} |".format(num_test_pids, num_query_imgs_same))
         logger.info("  query(diff) | {:5d} | {:8d} |".format(num_test_pids, num_query_imgs_diff))
         logger.info("  gallery     | {:5d} | {:8d} |".format(num_test_pids, num_gallery_imgs))
+        if self.enriched_dir is not None:
+            logger.info("  enriched    | ----- | {:8d} |".format(num_enriched_imgs))
         logger.info("  --------------------------------------------")
         logger.info("  total       | {:5d} | {:8d} | {:9d}".format(num_total_pids, num_total_imgs, num_total_clothes))
         logger.info("  --------------------------------------------")
@@ -62,6 +70,8 @@ class PRCC(object):
         self.query_same = query_same
         self.query_diff = query_diff
         self.gallery = gallery
+        if self.enriched_dir is not None:
+            self.enriched_gallery = enriched_gallery
 
         self.num_train_pids = num_train_pids
         self.num_train_clothes = num_train_clothes

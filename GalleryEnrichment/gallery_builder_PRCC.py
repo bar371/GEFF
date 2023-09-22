@@ -1,6 +1,7 @@
 import os
 from typing import List
 import shutil
+from pathlib import Path
 
 from GalleryEnrichment.gallery_builder import GalleryBuilder
 
@@ -10,12 +11,13 @@ UNDETECTED_FACE = '-01'
 
 
 class GalleryBuilderPRCC(GalleryBuilder):
-    def __init__(self, dataset_path, query_imgs_paths: List, predicted_labels, folder_char):
+    def __init__(self, dataset_path, query_imgs_paths: List, predicted_labels, folder_char, gallery_references):
         super().__init__(query_imgs_paths, predicted_labels)
         self.predicted_labels = [f'{int(pred_label):03d}' for pred_label in self.predicted_labels]
         self.dataset_path = dataset_path
         self.id_img_counter = {}
         self.folder_char = folder_char
+        self.gallery_references = gallery_references
 
     def _rename_query_for_gallery(self):
         for i, query_img_path in enumerate(self.query_imgs_paths):
@@ -24,7 +26,11 @@ class GalleryBuilderPRCC(GalleryBuilder):
                 self.renamed_query.append('')
             else:
                 img_num = self._get_id_num_img(predicted_label)
-                query_new_name = os.path.join(self.dataset_path, self.folder_char, f'{int(predicted_label):03d}', f'D_{img_num:04d}.jpg')
+                if self.gallery_references is not None:
+                    query_new_name = os.path.join(self.dataset_path, self.folder_char, f'{int(predicted_label):03d}',
+                                                  f'{Path(self.gallery_references[i]).stem}_{img_num}.jpg')
+                else:
+                    query_new_name = os.path.join(self.dataset_path, self.folder_char, f'{int(predicted_label):03d}', f'D_{img_num:04d}.jpg')
                 self.renamed_query.append(query_new_name)
 
     def _get_id_num_img(self, predicted_label):
@@ -36,10 +42,11 @@ class GalleryBuilderPRCC(GalleryBuilder):
             os.makedirs(os.path.join(self.dataset_path, self.folder_char, f'{int(id):03d}'), exist_ok=True)
 
     def _move_predicted_query_to_test(self):
-        print(f'Copying images from {os.path.join(self.dataset_path, self.folder_char)} to {os.path.join(self.dataset_path, "A")}')
-        id_folders = os.path.join(self.dataset_path, self.folder_char)
-        for id_folder in os.listdir(id_folders):
-            a_path = os.path.join(self.dataset_path, "A", id_folder)
-            for d_file in os.listdir(os.path.join(id_folders, id_folder)):
-                shutil.copy(os.path.join(id_folders, id_folder, d_file), a_path)
+        if self.gallery_references is None:
+            print(f'Copying images from {os.path.join(self.dataset_path, self.folder_char)} to {os.path.join(self.dataset_path, "A")}')
+            id_folders = os.path.join(self.dataset_path, self.folder_char)
+            for id_folder in os.listdir(id_folders):
+                a_path = os.path.join(self.dataset_path, "A", id_folder)
+                for d_file in os.listdir(os.path.join(id_folders, id_folder)):
+                    shutil.copy(os.path.join(id_folders, id_folder, d_file), a_path)
 

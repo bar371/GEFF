@@ -18,7 +18,9 @@ class ProcessLTCC(ProcessDataset):
         assert split in ['query', 'test'], "LTCC split must be one of ['query', 'test']"
         imgs_paths = []
         print(f"Loading split {split} for LTCC dataset..")
-        for img in tqdm.tqdm(glob(os.path.join(self.data_base_path, split) + "**/**", recursive=True)):
+        glob_paths = glob(os.path.join(self.data_base_path, split) + "**/**", recursive=True)
+        glob_paths.sort()
+        for img in tqdm.tqdm(glob_paths):
             suffix = img[-3:]
             if suffix in ['jpg', 'png'] and os.path.isfile(img):
                 imgs_paths.append(img)

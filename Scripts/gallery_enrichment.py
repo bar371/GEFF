@@ -7,6 +7,7 @@ from GalleryEnrichment.gallery_builder_CCVID import GalleryBuilderCCVID
 from GalleryEnrichment.gallery_builder_PRCC import GalleryBuilderPRCC
 from GalleryEnrichment.gallery_builder_LTCC import GalleryBuilderLTCC
 from GalleryEnrichment.gallery_builder_LaST import GalleryBuilderLaST
+from GalleryEnrichment.gallery_builder_VCClothes import GalleryBuilderVCClothes
 from ProcessData.process_data_constants import *
 from argparse import ArgumentParser
 
@@ -32,23 +33,30 @@ def get_args():
     return parser.parse_args()
 
 
-def build_gallery(args, dataset_processor, face_model, query_paths):
+def build_gallery(args, dataset_processor, face_model, query_paths, gallery_references):
     if args.dataset == PRCC:
         gallery_builder = GalleryBuilderPRCC(dataset_processor.data_base_path, query_paths,
                                              face_model.predicted_labels,
-                                             f'D_det_{args.detection_threshold}_sim_{args.similarity_threshold}')
+                                             f'{os.path.join("enriched_gallery", "A")}',
+                                             gallery_references)
     elif args.dataset == CCVID:
         gallery_builder = GalleryBuilderCCVID(dataset_processor.data_base_path, query_paths,
                                               face_model.predicted_labels,
-                                              f'enriched_gallery_det_{args.detection_threshold}_sim_{args.similarity_threshold}')
+                                              f'enriched_gallery')
     elif args.dataset == LTCC:
         gallery_builder = GalleryBuilderLTCC(dataset_processor.data_base_path, query_paths,
                                              face_model.predicted_labels,
-                                             f'enriched_gallery_det_{args.detection_threshold}_sim_{args.similarity_threshold}')
+                                             f'enriched_gallery',
+                                             gallery_references)
     elif args.dataset == LAST:
         gallery_builder = GalleryBuilderLaST(dataset_processor.data_base_path, query_paths,
                                              face_model.predicted_labels,
-                                             f'enriched_gallery_det_{args.detection_threshold}_sim_{args.similarity_threshold}')
+                                             f'enriched_gallery', gallery_references)
+
+    elif args.dataset == VCCLOTHES:
+        gallery_builder = GalleryBuilderVCClothes(dataset_processor.data_base_path, query_paths,
+                                                  face_model.predicted_labels,
+                                                  f'enriched_gallery', gallery_references)
     else:
         raise Exception(f'Supported dataset types are: {DATASETS}.')
 
@@ -73,7 +81,7 @@ def main(args):
     face_model.predict_labels()
 
     # Build the gallery from query with the predicted labels:
-    build_gallery(args, dataset_processor, face_model, query_paths)
+    build_gallery(args, dataset_processor, face_model, query_paths, gallery_references=face_model.gallery_references)
 
 
 if __name__ == '__main__':
