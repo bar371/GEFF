@@ -19,7 +19,6 @@ class ProcessPRCC(ProcessDataset):
         imgs_paths = []
         print(f"Loading split {split} for PRCC dataset..")
         glob_paths = glob(os.path.join(self.data_base_path, split) + "**/**", recursive=True)
-        glob_paths.sort()
         for img in tqdm.tqdm(glob_paths):
             suffix = img[-3:]
             if suffix == 'jpg' and os.path.isfile(img):
