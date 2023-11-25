@@ -1,10 +1,11 @@
-# ReFace: Improving Clothes-Changing Re-Identification With Face Features
+# GEFF: Improving Any Clothes-Changing Person ReID Model using Gallery Enrichment with Face Features
 
-Official implementation of the paper [*ReFace: Improving Clothes-Changing Re-Identification With Face Features*](https://arxiv.org/pdf/2211.13807.pdf).
-	
-[![PWC](https://img.shields.io/endpoint.svg?url=https://paperswithcode.com/badge/reface-improving-clothes-changing-re/person-re-identification-on-ltcc)](https://paperswithcode.com/sota/person-re-identification-on-ltcc?p=reface-improving-clothes-changing-re)
+Official implementation of the paper [*GEFF: Improving Any Clothes-Changing Person ReID Model using Gallery Enrichment with Face Features*](https://arxiv.org/pdf/2211.13807.pdf).
 
 [![PWC](https://img.shields.io/endpoint.svg?url=https://paperswithcode.com/badge/reface-improving-clothes-changing-re/person-re-identification-on-prcc)](https://paperswithcode.com/sota/person-re-identification-on-prcc?p=reface-improving-clothes-changing-re)
+
+[![PWC](https://img.shields.io/endpoint.svg?url=https://paperswithcode.com/badge/reface-improving-clothes-changing-re/person-re-identification-on-ltcc)](https://paperswithcode.com/sota/person-re-identification-on-ltcc?p=reface-improving-clothes-changing-re)
+
 
 ## Quick start
 To evaluate the performance of our model, we provide a [colab notebook](https://colab.research.google.com/drive/1fd91h6WhSSwuvPcUoVjNmPENBN1i5vqc?usp=sharing).
@@ -31,8 +32,8 @@ Below we provide the results achieved by our model on the clothes-changing setti
 
 | Dataset | PRCC | LTCC | LaST | VC-Clothes | CCVID |
 |---------|------|------|------|------------|-------|
-| Top-1   | 81.9 | 76.3 | 78.0 | 94.9       | 89.2  |
-| mAP     | 58.8 | 42.3 | 37.2 | 88.9       | NaN   |
+| Top-1   | 82.5 | 45.7 | 78.0 | 86.7       | 90.5  |
+| mAP     | 64.7 | 20.3 | 37.2 | 84.4       | NaN   |
 
 
 ## Acknowledgments
@@ -41,9 +42,10 @@ We thank them for their great works.
 
 ## Citation
 ```
-@article{arkushin2022reface,
-  title={ReFace: Improving Clothes-Changing Re-Identification With Face Features},
+@article{arkushin2023geff,
+  title={GEFF: Improving Any Clothes-Changing Person ReID Model using Gallery Enrichment with Face Features},
   author={Arkushin, Daniel and Cohen, Bar and Peleg, Shmuel and Fried, Ohad},
   journal={arXiv preprint arXiv:2211.13807},
-  year={2022}
+  year={2023}
+}
 ```
