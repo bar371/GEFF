@@ -1,19 +1,29 @@
 import os
 
+from ProcessData.process_42street import Process42Street
 from ProcessData.process_CCVID import ProcessCCVID
 from ProcessData.process_LTCC import ProcessLTCC
 from ProcessData.process_LaST import ProcessLaST
 from ProcessData.process_PRCC import ProcessPRCC
 from ProcessData.process_VC_Clothes import ProcessVCClothes
 from ProcessData.process_data_constants import CCVID, PRCC, PRCC_TEST_PATH, LTCC, LAST, VCCLOTHES, VCCLOTHES_SC, \
-    VCCLOTHES_CC, DATASETS
+    VCCLOTHES_CC, DATASETS, STREET42, TRACKLETS, GALLERY, EXTRA_DATA
 
 
-def prepare_dataset(args):
+def prepare_dataset(args, gallery_enrichment=False):
     if args.dataset == CCVID:
         dataset_processor = ProcessCCVID(args.dataset_path)
         gallery_paths = dataset_processor.create_imgs_paths(split='gallery')
         query_paths = dataset_processor.create_imgs_paths(split='query')
+
+    elif args.dataset == STREET42:
+        dataset_processor = Process42Street(args.dataset_path)
+        gallery_paths = dataset_processor.create_imgs_paths(split=GALLERY)
+        query_paths = dataset_processor.create_imgs_paths(split=TRACKLETS)
+        if gallery_enrichment and args.extra_data:
+            print('Using unlabeled extra data for gallery enrichment.')
+            extra_data_paths = dataset_processor.create_imgs_paths(split=EXTRA_DATA)
+            query_paths.extend(extra_data_paths)
 
     elif args.dataset == PRCC:
         dataset_path = os.path.join(args.dataset_path, PRCC_TEST_PATH)

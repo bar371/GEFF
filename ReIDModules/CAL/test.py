@@ -48,6 +48,23 @@ def extract_img_feature(model, dataloader, device='cuda'):
     return features, pids, camids, clothes_ids
 
 
+def extract_img_feature_street42(model, dataloader, device='cuda'):
+    features, pids, camids, clothes_ids = [], torch.tensor([]), torch.tensor([]), torch.tensor([])
+    for batch_idx, (imgs, batch_pids) in tqdm.tqdm(enumerate(dataloader),total=len(dataloader)):
+        flip_imgs = torch.flip(imgs, [3])
+        if device != 'cpu':
+            imgs, flip_imgs = imgs.cuda(device), flip_imgs.cuda(device)
+        batch_features = model(imgs)
+        batch_features_flip = model(flip_imgs)
+        batch_features += batch_features_flip
+        batch_features = F.normalize(batch_features, p=2, dim=1)
+
+        features.append(batch_features.cpu())
+        pids = torch.cat((pids, batch_pids.cpu()), dim=0)
+    features = torch.cat(features, 0)
+
+    return features, pids
+
 @torch.no_grad()
 def extract_vid_feature(model, dataloader, vid2clip_index, data_length):
     # In build_dataloader, each original test video is split into a series of equilong clips.

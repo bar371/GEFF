@@ -8,11 +8,11 @@ from ProcessData.process_data_constants import *
 from argparse import ArgumentParser
 from ReIDModules.CAL.configs.default_img import _C
 from ReIDModules.factory import ReID_module_factory
-from evaluate import evalute_wrapper, evaluate_performance_ccvid
+from evaluate import evalute_wrapper, evaluate_performance_ccvid, evaluate_performance_42street
 from ProcessData.process_dataset import build_custom_dataloader
 from ProcessData.utils import prepare_dataset
 import torch
-from FaceModules.insightface import InsightFace
+from FaceModules.insightface import InsightFace, FACE_EMBEDDING_SIZE
 import torch.nn.functional as F
 import numpy as np
 from ReIDModules.CAL.tools.utils import set_seed
@@ -93,6 +93,22 @@ def convert_ccvid_to_img_dataset(dataloader):
     return dataloader, track_to_imgs_mapper
 
 
+def convert_42street_to_img_dataset(dataloader):
+    temp_dataset = []
+    track_to_imgs_mapper = defaultdict(list)
+    img_counter = 0
+    for tracklet_imgs, gpid in dataloader.dataset.dataset:
+        for img_path in tracklet_imgs:
+            temp_dataset.append((img_path, gpid))
+            track_id = create_unique_ccvid_track(img_path, dataset_origin=CAL_DATALOADER)
+            track_to_imgs_mapper[track_id].append(img_counter)
+            img_counter += 1
+
+    dataloader.dataset.dataset = temp_dataset
+    dataloader.sampler.data_source = temp_dataset
+    return dataloader, track_to_imgs_mapper
+
+
 def create_unique_ccvid_track(img_path, dataset_origin):
     if dataset_origin == CAL_DATALOADER:
         path_split = img_path.split(os.sep)
@@ -129,8 +145,10 @@ def find_best_match(q_feat, q_camid, g_feats, g_pids, g_camids, q_clothes_id, g_
     features = F.normalize(q_feat, p=2, dim=1)
     others = F.normalize(g_feats.type(torch.float32), p=2, dim=1)
     simmat = torch.mm(features, others.t()).cpu().numpy()
-    same_camid_indices = np.where(g_camids == q_camid[0])[0]  # Ignore prediction with the same camid
-    simmat[:, same_camid_indices] = -np.inf
+    if args.dataset != STREET42:
+        # in the 42Street data we do not have CAM IDs
+        same_camid_indices = np.where(g_camids == q_camid[0])[0]  # Ignore prediction with the same camid
+        simmat[:, same_camid_indices] = -np.inf
     if args.CC:
         # Filter out appearances with the same clothes id
         same_clothes_indices = np.where(g_clothes_id == q_clothes_id[0])[0]
@@ -140,7 +158,7 @@ def find_best_match(q_feat, q_camid, g_feats, g_pids, g_camids, q_clothes_id, g_
 
 
 def reid_inference_on_ccvid(args, config):
-    queryloader, galleryloader, dataset = build_custom_dataloader(config, model_name=args.model)
+    queryloader, galleryloader, dataset, _ = build_custom_dataloader(config, model_name=args.reid_model)
     queryloader, q_track_mapper = convert_ccvid_to_img_dataset(queryloader)
     galleryloader, _ = convert_ccvid_to_img_dataset(galleryloader)
     reid_model = ReID_module_factory(args.reid_model, device=args.device)
@@ -203,6 +221,25 @@ def reid_inference_on_prcc(args, config):
            g_pids, g_camids, g_clothes_ids
 
 
+def reid_inference_on_42street(args, config):
+    queryloader, galleryloader, dataset, _ = build_custom_dataloader(config, model_name=args.reid_model)
+    queryloader, q_track_mapper = convert_42street_to_img_dataset(queryloader)
+    reid_model = ReID_module_factory(args.reid_model, device=args.device)
+    reid_model.init_model(config, args.reid_checkpoint)
+    print(f'Extracting reid query features in {args.dataset}')
+    qf, q_pids = reid_model.extract_features(queryloader)
+    print(f'Extracting reid gallery features in {args.dataset}')
+    gf, g_pids = reid_model.extract_features(galleryloader)
+
+    q_score_vectors = defaultdict(dict)
+    # go over all tracks and create a feature vector for each track (with the size of #identities)
+    for track_id, q_track_indices in q_track_mapper.items():
+        track_scores = find_best_match(qf[q_track_indices], None, gf, np.array(g_pids, dtype=int),
+                                       None, None, None)
+        q_score_vectors[track_id] = track_scores
+    return q_score_vectors, q_pids, g_pids, q_track_mapper
+
+
 def reid_inference(args, config):
     queryloader, galleryloader, dataset, enrichedloader = build_custom_dataloader(config, model_name=args.reid_model)
     reid_model = ReID_module_factory(args.reid_model, device=args.device)
@@ -248,7 +285,6 @@ def apply_enriched_gallery(distmat, enriched_distmat, gallery_paths, enriched_ga
                 replaced_imgs += 1
         # print(f'Replaced the distance of {replaced_imgs} gallery samples for query {q_idx}')
     return distmat
-
 
 
 def face_inference(args):
@@ -303,6 +339,42 @@ def ccvid_face_inference(args):
     return face_track_scores
 
 
+def street42_face_inference(args):
+    dataset_processor, gallery_paths, query_paths = prepare_dataset(args)
+
+    # Initialize the face model:
+    face_model = InsightFace(gallery_paths, query_paths, dataset_processor, device=args.device,
+                             detection_threshold=float(args.detection_threshold),
+                             similarity_threshold=args.similarity_threshold,
+                             CC=args.CC)
+    face_model.init()
+    face_model.compute_feature_vectors()
+    face_model.compute_similarities(gallery_enrichment=False)
+
+    face_tracks = defaultdict(list)
+    for i, img_path in enumerate(face_model.query_imgs_paths):
+        current_track = create_unique_ccvid_track(img_path=img_path, dataset_origin=CAL_DATALOADER)
+        face_tracks[current_track].append(i)
+
+    face_track_scores = defaultdict(dict)
+    g_face_numpy = np.zeros((len(face_model.gallery_features), face_model.gallery_features[0].shape[-1]))
+    for i, vector in enumerate(face_model.gallery_features):
+        g_face_numpy[i, :] = vector
+    g_face_tensor = torch.tensor(g_face_numpy, dtype=torch.float32, device=args.device)
+    for track, indices in face_tracks.items():
+        q_face_numpy = np.zeros((len(face_model.query_features), FACE_EMBEDDING_SIZE))
+        for i, vector in enumerate(face_model.query_features):
+            q_face_numpy[i, :] = vector
+        q_face_tensor = torch.tensor(q_face_numpy, dtype=torch.float32, device=args.device)[indices]
+        face_track_scores[track] = find_best_match(q_feat=q_face_tensor,
+                                                   q_camid=[],
+                                                   g_feats=g_face_tensor,
+                                                   g_pids=np.array(face_model.g_pids, dtype=int),
+                                                   g_camids=[],
+                                                   q_clothes_id=[],
+                                                   g_clothes_id=[])
+    return face_track_scores
+
 def run_inference(args, config):
     alpha = float(args.alpha)
     if args.dataset == PRCC:
@@ -335,6 +407,19 @@ def run_inference(args, config):
             all_tracks_results.append({'final_scores': track_scores, 'track_id': track})
 
         evaluate_performance_ccvid(all_tracks_results, args.alpha)
+
+    elif args.dataset == STREET42:
+        reid_score_vectors, q_pids, g_pids, track_len_mapper = reid_inference_on_42street(args, config)
+        g_pids = np.array(g_pids, dtype=int)
+        face_score_vectors = street42_face_inference(args)
+        all_tracks_results = []
+        for track in reid_score_vectors.keys():
+            track_scores = {i: 0 for i in set(g_pids)}
+            for pid in track_scores.keys():
+                track_scores[pid] = reid_score_vectors[track][pid] * alpha + (1 - alpha) * face_score_vectors[track][
+                    pid]
+            all_tracks_results.append({'final_scores': track_scores, 'track_id': track})
+        evaluate_performance_42street(all_tracks_results, args.alpha, track_len_mapper)
 
     else:
         # LTCC, LAST, VC-Clothes

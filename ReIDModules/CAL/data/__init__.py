@@ -4,6 +4,7 @@ import ReIDModules.CAL.data.temporal_transforms as TT
 from torch.utils.data import DataLoader
 from ReIDModules.CAL.data.dataloader import DataLoaderX
 from ReIDModules.CAL.data.dataset_loader import ImageDataset, VideoDataset
+from ReIDModules.CAL.data.datasets.street42 import Street42
 from ReIDModules.CAL.data.samplers import DistributedRandomIdentitySampler, DistributedInferenceSampler
 from ReIDModules.CAL.data.datasets.ltcc import LTCC
 from ReIDModules.CAL.data.datasets.prcc import PRCC
@@ -22,6 +23,7 @@ __factory = {
     'last': LaST,
     'ccvid': CCVID,
     'deepchange': DeepChange,
+    '42street': Street42,
 }
 
 VID_DATASET = []
