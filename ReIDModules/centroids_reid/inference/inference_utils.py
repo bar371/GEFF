@@ -143,6 +143,18 @@ def _inference(model, batch, use_cuda, normalize_with_bn=True):
         return global_feat, pid, cam_id, cloth_id
 
 
+def _inference_42street(model, batch, use_cuda, normalize_with_bn=True):
+    model.eval()
+    with torch.no_grad():
+        data, pid = batch
+        _, global_feat = model.backbone(
+            data.cuda() if use_cuda else data
+        )
+        if normalize_with_bn:
+            global_feat = model.bn(global_feat)
+        return global_feat, pid
+
+
 def run_inference(model, val_loader, cfg, print_freq, use_cuda):
     embeddings = []
     paths = []

@@ -5,17 +5,18 @@ from ProcessData.process_dataset import ProcessDataset
 import cv2
 import numpy as np
 import tqdm
-
+FACE_EMBEDDING_SIZE = 512
 
 class InsightFace:
     def __init__(self, gallery_imgs_paths: list, query_imgs_paths: list, dataset_processor: ProcessDataset, device: str,
-                 detection_threshold: float = 0.0, similarity_threshold: float = 0.0, CC: bool = False):
+                 detection_threshold: float = 0.0, similarity_threshold: float = 0.0, CC: bool = False, rank_diff: float = 0.0):
         self.gallery_imgs_paths = gallery_imgs_paths
         self.query_imgs_paths = query_imgs_paths
         self.dataset_processor = dataset_processor
         self.device = device
         self.detection_threshold = detection_threshold
         self.similarity_threshold = similarity_threshold
+        self.rank_diff = rank_diff
         self.CC = CC
         self.gallery_features = []
         self.query_features = []
@@ -88,14 +89,18 @@ class InsightFace:
         if isinstance(crop_img, str):
             crop_img = cv2.imread(crop_img)
         face_img = None
-        detection_res = self.face_detector.get(crop_img)
-        if len(detection_res) > 0 and detection_res[0] and detection_res[0]['det_score'] >= self.detection_threshold:
-            face_bbox = detection_res[0]['bbox']
-            X = np.max([int(face_bbox[0]), 0])
-            Y = np.max([int(face_bbox[1]), 0])
-            W = np.min([int(face_bbox[2]), crop_img.shape[1]])
-            H = np.min([int(face_bbox[3]), crop_img.shape[0]])
-            face_img = crop_img[Y:H, X:W]
+        if crop_img is not None:
+            detection_res = self.face_detector.get(crop_img)
+            if len(detection_res) > 0 and detection_res[0] and detection_res[0]['det_score'] >= self.detection_threshold:
+                face_bbox = detection_res[0]['bbox']
+                X = np.max([int(face_bbox[0]), 0])
+                Y = np.max([int(face_bbox[1]), 0])
+                W = np.min([int(face_bbox[2]), crop_img.shape[1]])
+                H = np.min([int(face_bbox[3]), crop_img.shape[0]])
+                face_img = crop_img[Y:H, X:W]
+        else:
+            face_img, detection_res = None, None
+            print(f'No image found for {crop_img}.')
         return face_img, detection_res
 
     def compute_similarities(self, gallery_enrichment):
@@ -123,15 +128,23 @@ class InsightFace:
             sims = torch.cosine_similarity(torch.from_numpy(q_feat).float().to(device), gallery_tensors, dim=1).detach().cpu().numpy()
 
             # set to -inf all gallery scores where the camid is the same as the camid of the query
-            same_camid_indices = np.where(self.g_camids == self.q_camids[i])[0]
-            sims[same_camid_indices] = -np.inf
+            if self.g_camids is not None and self.q_camids is not None and len(self.g_camids) > 0 and len(self.q_camids) > 0:
+                same_camid_indices = np.where(self.g_camids == self.q_camids[i])[0]
+                sims[same_camid_indices] = -np.inf
             if gallery_enrichment:
                 if self.CC:
                     same_clothes_indices = np.where(np.array(self.dataset_processor.clothes_ids_gallery) ==
                                                     self.dataset_processor.clothes_ids_query[i])[0]
                     convert_to_sims_indices = np.where(np.in1d(np.array(gallery_indices), same_clothes_indices))[0]
                     sims[convert_to_sims_indices] = -np.inf
-                self.similarities[i, :] = [np.max(sims), np.argmax(sims)]
+                sim_i, arg_sim_i = [np.max(sims), np.argmax(sims)]
+                if self.rank_diff > 0:
+                    from Scripts.inference import get_score_all_ids_full_gallery
+                    gpid_scores = sorted(get_score_all_ids_full_gallery(np.expand_dims(sims, axis=0), self.g_pids).values(), reverse=True)
+                    calc_ranking_diff = abs(gpid_scores[0] - gpid_scores[1])
+                    if calc_ranking_diff < self.rank_diff: # difference between rank-1 and rank-2 not high enough, do not enrich
+                        sim_i, arg_sim_i = [-np.inf, np.argmax(sims)]
+                self.similarities[i, :] = [sim_i, arg_sim_i]
             else:
                 self.similarities[i,:] = sims
 
