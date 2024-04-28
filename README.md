@@ -39,9 +39,9 @@ The different datasets can be downloaded through the official pages of these dat
 
 ### The 42street Dataset
 The 42street dataset can be downloaded from the following link:
-* [dataset]()
-* [extra-data-1]()
-* [extra-data-2]()
+* [dataset](https://drive.google.com/file/d/1BP1TR5gNMB1ByyReFGJ4G4Zt6gHd4J0G/view?usp=sharing)
+* [extra-data-1](https://drive.google.com/file/d/10s_IJvogVZaIXtPirJv_idKHIQTJryDx/view?usp=sharing)
+* [extra-data-2](https://drive.google.com/file/d/1E36IoB-Iyi2XNgfOXoi6d1CQKu2EDP2o/view?usp=sharing)
 
 #### Dataset Structure
 - *gallery*: folder with annotated crops - 16,668 images of 13 identities + 1 category for unidentified persons.
